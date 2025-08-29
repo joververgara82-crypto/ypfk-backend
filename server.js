@@ -1,47 +1,61 @@
-const express = require("express");
-const app = express();
-const port = process.env.PORT || 3000;
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
 
-// Middleware para leer JSON en requests
+const app = express();
+const PORT = process.env.PORT || 3000;
+
 app.use(express.json());
 
-// Base de datos temporal en memoria
-let keys = [
-  { id: "0C17A56F-2FCF-4650-B528-8FF0A299AC32", active: true }
-];
+// Array para guardar keys en memoria con historial
+let keys = []; // Cada key: { id: "uuid", active: true, createdAt: Date }
 
-// Ruta para verificar key
-app.post("/check-key", (req, res) => {
+// ======================
+// Rutas
+// ======================
+
+// Generar nueva key automáticamente
+app.post('/generate-key', (req, res) => {
+  const newKey = {
+    id: uuidv4(),
+    active: true,
+    createdAt: new Date()
+  };
+  keys.push(newKey);
+  res.json({ success: true, key: newKey });
+});
+
+// Verificar key
+app.post('/check-key', (req, res) => {
   const { key } = req.body;
   const found = keys.find(k => k.id === key && k.active);
+  res.json({ valid: !!found });
+});
+
+// Revocar una key específica
+app.post('/revoke-key', (req, res) => {
+  const { key } = req.body;
+  const found = keys.find(k => k.id === key);
   if (found) {
-    return res.json({ valid: true });
+    found.active = false;
+    return res.json({ success: true, revokedKey: found });
   }
-  res.json({ valid: false });
+  res.json({ success: false, message: 'Key no encontrada' });
 });
 
-// Ruta para crear key nueva
-app.post("/create-key", (req, res) => {
-  const { id } = req.body;
-  keys.push({ id, active: true });
-  res.json({ success: true, keys });
-});
-
-// Ruta para revocar una key
-app.post("/revoke-key", (req, res) => {
-  const { id } = req.body;
-  const key = keys.find(k => k.id === id);
-  if (key) key.active = false;
-  res.json({ success: true, keys });
-});
-
-// Ruta para tumbar todas las keys
-app.post("/revoke-all", (req, res) => {
+// Revocar todas las keys activas
+app.post('/revoke-all', (req, res) => {
   keys = keys.map(k => ({ ...k, active: false }));
-  res.json({ success: true, keys });
+  res.json({ success: true, message: 'Todas las keys revocadas' });
 });
 
+// Listar todas las keys (opcional, útil para debugging)
+app.get('/keys', (req, res) => {
+  res.json(keys);
+});
+
+// ======================
 // Iniciar servidor
-app.listen(port, () => {
-  console.log(`Servidor escuchando en http://localhost:${port}`);
+// ======================
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
