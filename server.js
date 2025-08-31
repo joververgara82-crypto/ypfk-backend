@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');   // 👈 Importa cors
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
@@ -6,7 +7,14 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Array para guardar keys en memoria con historial
+// 👇 Agregar CORS para tu dominio de Netlify (seguro)
+app.use(cors({
+  origin: "https://app-yp.netlify.app"
+}));
+
+// ======================
+// Array para guardar keys
+// ======================
 let keys = []; // Cada key: { id: "uuid", active: true, createdAt: Date }
 
 // ======================
@@ -48,7 +56,7 @@ app.post('/revoke-all', (req, res) => {
   res.json({ success: true, message: 'Todas las keys revocadas' });
 });
 
-// Listar todas las keys (opcional, útil para debugging)
+// Listar todas las keys
 app.get('/keys', (req, res) => {
   res.json(keys);
 });
