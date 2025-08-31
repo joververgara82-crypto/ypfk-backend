@@ -15,31 +15,50 @@ app.use(cors({
 // ======================
 // Array para guardar keys
 // ======================
-let keys = []; // Cada key: { id: "uuid", active: true, createdAt: Date }
+let keys = []; 
+// Cada key: { id: "uuid", active: true, used: false, createdAt: Date }
 
 // ======================
-// Rutas originales
+// Generar nueva key
 // ======================
-
-// Generar nueva key automáticamente
 app.post('/generate-key', (req, res) => {
   const newKey = {
     id: uuidv4(),
     active: true,
+    used: false,
     createdAt: new Date()
   };
   keys.push(newKey);
   res.json({ success: true, key: newKey });
 });
 
-// Verificar key (POST)
+// ======================
+// Verificar y usar key (login)
+// ======================
 app.post('/check-key', (req, res) => {
   const { key } = req.body;
-  const found = keys.find(k => k.id === key && k.active);
-  res.json({ valid: !!found });
+  const found = keys.find(k => k.id === key);
+
+  if (!found) {
+    return res.json({ success: false, estado: "invalida", message: "Key inválida" });
+  }
+
+  if (!found.active) {
+    return res.json({ success: false, estado: "revocada", message: "Key revocada o inactiva" });
+  }
+
+  if (found.used) {
+    return res.json({ success: false, estado: "usada", message: "La clave ya ha sido utilizada" });
+  }
+
+  // ✅ Primera vez que se usa
+  found.used = true;
+  res.json({ success: true, estado: "activa", message: "Login exitoso", key: found });
 });
 
+// ======================
 // Revocar una key específica
+// ======================
 app.post('/revoke-key', (req, res) => {
   const { key } = req.body;
   const found = keys.find(k => k.id === key);
@@ -50,22 +69,40 @@ app.post('/revoke-key', (req, res) => {
   res.json({ success: false, message: 'Key no encontrada' });
 });
 
+// ======================
+// 🔹 Reactivar una key específica
+// ======================
+app.post('/reactivate-key', (req, res) => {
+  const { key } = req.body;
+  const found = keys.find(k => k.id === key);
+
+  if (!found) {
+    return res.json({ success: false, message: "Key no encontrada" });
+  }
+
+  found.active = true;
+  found.used = false; // ✅ se resetea el uso
+  res.json({ success: true, reactivatedKey: found });
+});
+
+// ======================
 // Revocar todas las keys activas
+// ======================
 app.post('/revoke-all', (req, res) => {
   keys = keys.map(k => ({ ...k, active: false }));
   res.json({ success: true, message: 'Todas las keys revocadas' });
 });
 
+// ======================
 // Listar todas las keys
+// ======================
 app.get('/keys', (req, res) => {
   res.json(keys);
 });
 
 // ======================
-// 🔹 NUEVAS RUTAS (compatibles con tu frontend)
+// Info de una key
 // ======================
-
-// Obtener info de una key (lo que pide tu frontend con axios.get(`${B}/key/${id}`))
 app.get('/key/:id', (req, res) => {
   const { id } = req.params;
   const found = keys.find(k => k.id === id);
@@ -74,17 +111,18 @@ app.get('/key/:id', (req, res) => {
     return res.status(404).json({ error: "Key no encontrada" });
   }
 
-  // Simulamos la estructura que tu frontend espera:
   res.json({
     key: [{
-      tipo: "premium",       // 👈 puedes ajustar
-      autorizado: found.active ? "sí" : "no",
-      estado: found.active ? "activa" : "revocada"
+      tipo: "premium",
+      autorizado: (found.active && !found.used) ? "sí" : "no",
+      estado: !found.active ? "revocada" : found.used ? "usada" : "activa"
     }]
   });
 });
 
-// Actualizar estado de una key (lo que pide tu frontend con PUT /actualizar/:id/1)
+// ======================
+// Actualizar estado de key (compatibilidad frontend)
+// ======================
 app.put('/actualizar/:id/:estado', (req, res) => {
   const { id, estado } = req.params;
   const found = keys.find(k => k.id === id);
@@ -93,8 +131,8 @@ app.put('/actualizar/:id/:estado', (req, res) => {
     return res.status(404).json({ success: false, message: "Key no encontrada" });
   }
 
-  // Si estado === "1" activamos, si es "0" desactivamos
   found.active = (estado === "1");
+  if (found.active) found.used = false; // si se reactiva, se marca como no usada
 
   res.json({
     success: true,
