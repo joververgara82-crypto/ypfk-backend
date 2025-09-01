@@ -33,7 +33,7 @@ app.post('/generate-key', (req, res) => {
 });
 
 // ======================
-// Verificar y usar key (login)
+// Verificar key (solo consulta)
 // ======================
 app.post('/check-key', (req, res) => {
   const { key } = req.body;
@@ -47,13 +47,36 @@ app.post('/check-key', (req, res) => {
     return res.json({ success: false, estado: "revocada", message: "Key revocada o inactiva" });
   }
 
-  if (found.used) {
-    return res.json({ success: false, estado: "usada", message: "La clave ya ha sido utilizada" });
+  // ✅ Solo retorna estado, no modifica
+  res.json({
+    success: true,
+    estado: found.used ? "usada" : "activa",
+    key: found
+  });
+});
+
+// ======================
+// Usar key (consumirla)
+// ======================
+app.post('/use-key', (req, res) => {
+  const { key } = req.body;
+  const found = keys.find(k => k.id === key);
+
+  if (!found) {
+    return res.json({ success: false, estado: "invalida", message: "Key inválida" });
   }
 
-  // ✅ Primera vez que se usa
+  if (!found.active) {
+    return res.json({ success: false, estado: "revocada", message: "Key revocada o inactiva" });
+  }
+
+  if (found.used) {
+    return res.json({ success: false, estado: "usada", message: "La clave ya fue usada" });
+  }
+
+  // ✅ Aquí sí se consume
   found.used = true;
-  res.json({ success: true, estado: "activa", message: "Login exitoso", key: found });
+  res.json({ success: true, estado: "usada", message: "Clave consumida", key: found });
 });
 
 // ======================
