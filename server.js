@@ -16,14 +16,21 @@ app.use(cors({
 // Array para guardar keys
 // ======================
 let keys = [];
-// Cada key: { id: "uuid", active: true, used: false, createdAt: Date }
+// Cada key: { id: "UUID en mayúscula", active: true, used: false, createdAt: Date }
+
+// ======================
+// Función para normalizar keys
+// ======================
+function normalizeKey(key) {
+  return key.toUpperCase();
+}
 
 // ======================
 // Generar nueva key
 // ======================
 app.post('/generate-key', (req, res) => {
   const newKey = {
-    id: uuidv4().toUpperCase(), // ✅ ahora la key se genera en mayúscula
+    id: normalizeKey(uuidv4()), // todo en mayúscula
     active: true,
     used: false,
     createdAt: new Date()
@@ -36,11 +43,8 @@ app.post('/generate-key', (req, res) => {
 // Verificar y usar key (login)
 // ======================
 app.post('/check-key', (req, res) => {
-  const { key } = req.body;
-  if (!key) return res.json({ success: false, estado: "invalida", message: "Key vacía" });
-
-  const upperKey = key.toUpperCase(); // ✅ leer la key en mayúscula
-  const found = keys.find(k => k.id === upperKey);
+  const keyInput = normalizeKey(req.body.key);
+  const found = keys.find(k => k.id === keyInput);
 
   if (!found) {
     return res.json({ success: false, estado: "invalida", message: "Key inválida" });
@@ -63,9 +67,8 @@ app.post('/check-key', (req, res) => {
 // Revocar una key específica
 // ======================
 app.post('/revoke-key', (req, res) => {
-  const { key } = req.body;
-  const upperKey = key.toUpperCase();
-  const found = keys.find(k => k.id === upperKey);
+  const keyInput = normalizeKey(req.body.key);
+  const found = keys.find(k => k.id === keyInput);
   if (found) {
     found.active = false;
     return res.json({ success: true, revokedKey: found });
@@ -77,11 +80,12 @@ app.post('/revoke-key', (req, res) => {
 // Reactivar una key específica
 // ======================
 app.post('/reactivate-key', (req, res) => {
-  const { key } = req.body;
-  const upperKey = key.toUpperCase();
-  const found = keys.find(k => k.id === upperKey);
+  const keyInput = normalizeKey(req.body.key);
+  const found = keys.find(k => k.id === keyInput);
 
-  if (!found) return res.json({ success: false, message: "Key no encontrada" });
+  if (!found) {
+    return res.json({ success: false, message: "Key no encontrada" });
+  }
 
   found.active = true;
   found.used = false; // ✅ se resetea el uso
@@ -107,10 +111,12 @@ app.get('/keys', (req, res) => {
 // Info de una key
 // ======================
 app.get('/key/:id', (req, res) => {
-  const id = req.params.id.toUpperCase(); // ✅ lectura en mayúscula
-  const found = keys.find(k => k.id === id);
+  const keyId = normalizeKey(req.params.id);
+  const found = keys.find(k => k.id === keyId);
 
-  if (!found) return res.status(404).json({ error: "Key no encontrada" });
+  if (!found) {
+    return res.status(404).json({ error: "Key no encontrada" });
+  }
 
   res.json({
     key: [{
@@ -125,14 +131,16 @@ app.get('/key/:id', (req, res) => {
 // Actualizar estado de key (compatibilidad frontend)
 // ======================
 app.put('/actualizar/:id/:estado', (req, res) => {
-  const id = req.params.id.toUpperCase();
-  const estado = req.params.estado;
-  const found = keys.find(k => k.id === id);
+  const keyId = normalizeKey(req.params.id);
+  const { estado } = req.params;
+  const found = keys.find(k => k.id === keyId);
 
-  if (!found) return res.status(404).json({ success: false, message: "Key no encontrada" });
+  if (!found) {
+    return res.status(404).json({ success: false, message: "Key no encontrada" });
+  }
 
   found.active = (estado === "1");
-  if (found.active) found.used = false;
+  if (found.active) found.used = false; // si se reactiva, se marca como no usada
 
   res.json({
     success: true,
@@ -141,6 +149,26 @@ app.put('/actualizar/:id/:estado', (req, res) => {
       estado: found.active ? "activa" : "revocada"
     }
   });
+});
+
+// ======================
+// Permitir añadir keys externas para pruebas
+// ======================
+app.post('/add-key', (req, res) => {
+  const keyInput = normalizeKey(req.body.key);
+  if (!keyInput) return res.json({ success: false, message: "No se proporcionó key" });
+
+  const exists = keys.find(k => k.id === keyInput);
+  if (exists) return res.json({ success: false, message: "La key ya existe" });
+
+  const newKey = {
+    id: keyInput,
+    active: true,
+    used: false,
+    createdAt: new Date()
+  };
+  keys.push(newKey);
+  res.json({ success: true, key: newKey });
 });
 
 // ======================
