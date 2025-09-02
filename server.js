@@ -1,36 +1,46 @@
-import express from "express";
-import bodyParser from "body-parser";
-import { v4 as uuidv4 } from "uuid";
+const express = require('express');
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(bodyParser.json());
+app.use(express.json());
+
+// 🔹 Habilitar CORS solo para tu frontend en Netlify
+app.use(cors({
+  origin: "https://app-yp.netlify.app"
+}));
 
 // ======================
-// Memoria de keys
+// Array para guardar keys
 // ======================
 let keys = [];
+// Cada key: { id: "uuid", active: true, used: false, createdAt: Date }
 
 // ======================
-// Generar key
+// Generar nueva key
 // ======================
 app.post('/generate-key', (req, res) => {
   const newKey = {
-    id: uuidv4().toUpperCase(), // siempre mayúscula
+    id: uuidv4().toUpperCase(), // ✅ ahora la key se genera en mayúscula
+    active: true,
     used: false,
-    active: true
+    createdAt: new Date()
   };
   keys.push(newKey);
   res.json({ success: true, key: newKey });
 });
 
 // ======================
-// Verificar key (no la consume)
+// Verificar y usar key (login)
 // ======================
 app.post('/check-key', (req, res) => {
   const { key } = req.body;
-  const found = keys.find(k => k.id === key.toUpperCase());
+  if (!key) return res.json({ success: false, estado: "invalida", message: "Key vacía" });
+
+  const upperKey = key.toUpperCase(); // ✅ leer la key en mayúscula
+  const found = keys.find(k => k.id === upperKey);
 
   if (!found) {
     return res.json({ success: false, estado: "invalida", message: "Key inválida" });
@@ -41,33 +51,12 @@ app.post('/check-key', (req, res) => {
   }
 
   if (found.used) {
-    return res.json({ success: false, estado: "usada", message: "La clave ya fue usada" });
+    return res.json({ success: false, estado: "usada", message: "La clave ya ha sido utilizada" });
   }
 
-  res.json({ success: true, estado: "activa", key: found });
-});
-
-// ======================
-// Usar key (consumirla)
-// ======================
-app.post('/use-key', (req, res) => {
-  const { key } = req.body;
-  const found = keys.find(k => k.id === key.toUpperCase());
-
-  if (!found) {
-    return res.json({ success: false, estado: "invalida", message: "Key inválida" });
-  }
-
-  if (!found.active) {
-    return res.json({ success: false, estado: "revocada", message: "Key revocada o inactiva" });
-  }
-
-  if (found.used) {
-    return res.json({ success: false, estado: "usada", message: "La clave ya fue usada" });
-  }
-
+  // ✅ Primera vez que se usa
   found.used = true;
-  res.json({ success: true, estado: "usada", message: "Clave consumida", key: found });
+  res.json({ success: true, estado: "activa", message: "Login exitoso", key: found });
 });
 
 // ======================
@@ -75,7 +64,8 @@ app.post('/use-key', (req, res) => {
 // ======================
 app.post('/revoke-key', (req, res) => {
   const { key } = req.body;
-  const found = keys.find(k => k.id === key.toUpperCase());
+  const upperKey = key.toUpperCase();
+  const found = keys.find(k => k.id === upperKey);
   if (found) {
     found.active = false;
     return res.json({ success: true, revokedKey: found });
@@ -84,39 +74,43 @@ app.post('/revoke-key', (req, res) => {
 });
 
 // ======================
-// Revocar todas las keys
-// ======================
-app.post('/revoke-all', (req, res) => {
-  keys.forEach(k => k.active = false);
-  res.json({ success: true, message: "Todas las keys han sido revocadas" });
-});
-
-// ======================
 // Reactivar una key específica
 // ======================
 app.post('/reactivate-key', (req, res) => {
   const { key } = req.body;
-  const found = keys.find(k => k.id === key.toUpperCase());
+  const upperKey = key.toUpperCase();
+  const found = keys.find(k => k.id === upperKey);
 
-  if (!found) {
-    return res.json({ success: false, message: "Key no encontrada" });
-  }
+  if (!found) return res.json({ success: false, message: "Key no encontrada" });
 
   found.active = true;
-  found.used = false; // 🔥 reseteo de uso
+  found.used = false; // ✅ se resetea el uso
   res.json({ success: true, reactivatedKey: found });
+});
+
+// ======================
+// Revocar todas las keys activas
+// ======================
+app.post('/revoke-all', (req, res) => {
+  keys = keys.map(k => ({ ...k, active: false }));
+  res.json({ success: true, message: 'Todas las keys revocadas' });
+});
+
+// ======================
+// Listar todas las keys
+// ======================
+app.get('/keys', (req, res) => {
+  res.json(keys);
 });
 
 // ======================
 // Info de una key
 // ======================
 app.get('/key/:id', (req, res) => {
-  const { id } = req.params;
-  const found = keys.find(k => k.id === id.toUpperCase());
+  const id = req.params.id.toUpperCase(); // ✅ lectura en mayúscula
+  const found = keys.find(k => k.id === id);
 
-  if (!found) {
-    return res.status(404).json({ error: "Key no encontrada" });
-  }
+  if (!found) return res.status(404).json({ error: "Key no encontrada" });
 
   res.json({
     key: [{
@@ -128,11 +122,25 @@ app.get('/key/:id', (req, res) => {
 });
 
 // ======================
-// Resetear todas las keys
+// Actualizar estado de key (compatibilidad frontend)
 // ======================
-app.post('/reset-keys', (req, res) => {
-  keys = [];
-  res.json({ success: true, message: "Todas las keys han sido eliminadas" });
+app.put('/actualizar/:id/:estado', (req, res) => {
+  const id = req.params.id.toUpperCase();
+  const estado = req.params.estado;
+  const found = keys.find(k => k.id === id);
+
+  if (!found) return res.status(404).json({ success: false, message: "Key no encontrada" });
+
+  found.active = (estado === "1");
+  if (found.active) found.used = false;
+
+  res.json({
+    success: true,
+    key: {
+      id: found.id,
+      estado: found.active ? "activa" : "revocada"
+    }
+  });
 });
 
 // ======================
