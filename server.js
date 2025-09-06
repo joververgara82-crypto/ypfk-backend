@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 // ======================
 // 🔑 Token de seguridad
 // ======================
-const AUTH_TOKEN = "EmcssJGmgsjsLhsHohVccHwyNnkHgJsKHGGceLmhKSKHDJDKSgHmOPFcogoposiEHsreqGL";
+const AUTH_TOKEN = "EmcssJGmgsjsLhsHohVccHwyNnkHgJsKHGGceLmhKSKHDJDKSgHmOPFcogoposiEHsreqGL"; // 👉 cámbialo por el tuyo
 
 // ======================
 // Middleware de seguridad
